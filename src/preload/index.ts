@@ -68,6 +68,9 @@ const api: MyChaparApi = {
   setMenuLabels: (labels: MenuLabels) => {
     ipcRenderer.send(IPC.MENU_SET_LABELS, labels);
   },
+  readClipboardText: (): Promise<string> => ipcRenderer.invoke(IPC.CLIPBOARD_READ_TEXT),
+  writeClipboardText: (text: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.CLIPBOARD_WRITE_TEXT, text),
   getPrefs: (): Promise<AppPrefs> => ipcRenderer.invoke(IPC.GET_PREFS),
   setPrefs: (patch: Partial<AppPrefs>): Promise<AppPrefs> =>
     ipcRenderer.invoke(IPC.SET_PREFS, patch),

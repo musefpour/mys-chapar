@@ -83,7 +83,11 @@ export function useMenuCommands(): void {
           ui.openBottomPanel("console");
           return;
         case "help.checkUpdates":
-          ui.showToast(t("menu.upToDate"));
+          void import("../../stores/update-store").then(async ({ useUpdateStore }) => {
+            const outcome = await useUpdateStore.getState().checkNow();
+            if (outcome === "latest") ui.showToast(t("menu.upToDate"));
+            else if (outcome === "error") ui.showToast(t("settings.updateFailed"));
+          });
           return;
         case "help.about":
           ui.openSettings("about");

@@ -3572,6 +3572,11 @@ export const catalog: Record<Exclude<LocaleId, "en">, Partial<Messages>> = {
     "settings.updateCheck": "بررسی به‌روزرسانی",
     "settings.updateChecking": "در حال بررسی به‌روزرسانی…",
     "settings.updateLatest": "شما آخرین نسخه MYs Chapar را دارید.",
+    "settings.updateFailed": "بررسی به‌روزرسانی ممکن نشد. بعداً دوباره تلاش کنید.",
+    "update.requiredTitle": "نیاز به به‌روزرسانی",
+    "update.requiredMessage":
+      "نسخه جدیدتری از MYs Chapar موجود است ({latest}). نسخه فعلی شما {current} است.",
+    "update.forceHint": "این به‌روزرسانی اجباری است. تا نصب نسخه جدید نمی‌توانید ادامه دهید.",
     "settings.aboutVersion": "نسخه",
     "settings.aboutUi": "نسخه رابط",
     "settings.aboutElectron": "نسخه بستر دسکتاپ",

@@ -9,6 +9,9 @@ import {
   type AuthProvider,
   type AuthUser,
 } from "../lib/auth-client";
+import { stopCloudSync } from "../lib/cloud-sync";
+import { useLibraryStore } from "./library-store";
+import { useRequestStore } from "./request-store";
 
 interface AuthState {
   user: AuthUser | null;
@@ -19,6 +22,13 @@ interface AuthState {
   signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
   signOut: () => void;
   clearError: () => void;
+}
+
+function clearLocalUserData(): void {
+  stopCloudSync();
+  persistSession(null);
+  useLibraryStore.getState().resetOfflineDefaults();
+  useRequestStore.getState().closeAllTabs();
 }
 
 async function runAuth(
@@ -50,10 +60,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     runAuth(set, () => registerWithEmail(name, email, password)),
 
   signOut: () => {
-    void logoutFromServer().finally(() => {
-      persistSession(null);
-      set({ user: null, error: null, busy: false });
-    });
+    const refreshToken = readSession()?.refreshToken ?? null;
+    clearLocalUserData();
+    set({ user: null, error: null, busy: false });
+    void logoutFromServer(refreshToken);
   },
   clearError: () => set({ error: null }),
 }));

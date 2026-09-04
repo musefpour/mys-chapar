@@ -478,6 +478,8 @@ interface LibraryState {
     activeWorkspaceId: string,
     history: HistoryEntry[],
   ) => void;
+  /** Wipe cloud-synced library and restore empty local workspaces (used on sign-out). */
+  resetOfflineDefaults: () => void;
   saveResponseToHistory: (
     entryId: string | null,
     request: HttpRequestDraft,
@@ -1064,6 +1066,21 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
         activeWorkspaceId: active.id,
         ...sliceFromWorkspace(active),
         history,
+      });
+    },
+
+    resetOfflineDefaults: () => {
+      const my = createWorkspace(MY_WORKSPACE_NAME, "personal");
+      const team = createWorkspace(TEAM_WORKSPACE_NAME, "team");
+      const workspaces = [my, team];
+      persistWorkspaces(workspaces, my.id);
+      persistHistory([]);
+      set({
+        workspaces,
+        activeWorkspaceId: my.id,
+        ...sliceFromWorkspace(my),
+        history: [],
+        sidebarTab: "collections",
       });
     },
   };

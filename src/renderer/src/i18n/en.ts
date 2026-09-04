@@ -427,6 +427,11 @@ export const en = {
   "settings.updateCheck": "Check for Updates",
   "settings.updateChecking": "Checking for updates…",
   "settings.updateLatest": "You're on the latest version of MYs Chapar.",
+  "settings.updateFailed": "Could not check for updates. Try again later.",
+  "update.requiredTitle": "Update required",
+  "update.requiredMessage":
+    "A newer version of MYs Chapar is available ({latest}). You are on {current}.",
+  "update.forceHint": "This update is required. The app cannot continue until you install it.",
   "settings.aboutVersion": "Version",
   "settings.aboutUi": "UI version",
   "settings.aboutElectron": "Desktop platform version",

@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { URL } from "node:url";
 import { ipcMain, shell } from "electron";
+import { resolveApiBaseUrl } from "@shared/api-base";
 import {
   IPC,
   type AuthEmailPayload,
@@ -10,11 +11,10 @@ import {
   type AuthProvider,
   type AuthUser,
 } from "@shared/types";
+import { oauthCallbackPage } from "../oauth-callback-page";
+import { loadPrefs } from "../prefs";
 
-const API_BASE = (process.env.VITE_API_BASE_URL ?? "http://127.0.0.1:1700/api").replace(
-  /\/$/,
-  "",
-);
+const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL as string | undefined);
 const DEFAULT_REDIRECT_URI =
   process.env.OAUTH_REDIRECT_URI ?? "http://127.0.0.1:53789/oauth/callback";
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
@@ -84,6 +84,7 @@ async function fetchJson(url: string, init?: RequestInit): Promise<BackendAuthBo
 function waitForOAuthCallback(
   redirectUri: string,
   expectedState: string,
+  locale?: string,
 ): Promise<{ code: string; state: string }> {
   const target = new URL(redirectUri);
   const port = Number(target.port) || (target.protocol === "https:" ? 443 : 80);
@@ -115,12 +116,12 @@ function waitForOAuthCallback(
       const state = reqUrl.searchParams.get("state");
       const error = reqUrl.searchParams.get("error");
 
+      let pageKind: "success" | "cancelled" | "mismatch" = "success";
+      if (error) pageKind = "cancelled";
+      else if (!code || !state || state !== expectedState) pageKind = "mismatch";
+
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(
-        "<!doctype html><html><body style='font-family:system-ui;padding:2rem'>"
-          + "<p>Sign in complete. You can close this tab and return to MYs Chapar.</p>"
-          + "</body></html>",
-      );
+      res.end(oauthCallbackPage(pageKind, locale));
 
       if (error) {
         finish(() => reject(new Error("Sign in was cancelled")));
@@ -165,10 +166,21 @@ function sessionFromBody(body: BackendAuthBody, provider: AuthProvider): AuthOAu
   };
 }
 
-async function startGoogleOAuth(): Promise<AuthOAuthResult> {
+function resolveOAuthLocale(explicit?: string): string {
+  const fromPayload = explicit?.trim();
+  if (fromPayload) return fromPayload;
+  try {
+    return loadPrefs().locale?.trim() || "en";
+  } catch {
+    return "en";
+  }
+}
+
+async function startGoogleOAuth(locale?: string): Promise<AuthOAuthResult> {
   const redirectUri = DEFAULT_REDIRECT_URI;
   const state = createState();
   const { verifier, challenge } = createPkcePair();
+  const uiLocale = resolveOAuthLocale(locale);
 
   const startUrl = new URL(`${API_BASE}/v1/auth/oauth/google/start`);
   startUrl.searchParams.set("code_challenge", challenge);
@@ -185,7 +197,7 @@ async function startGoogleOAuth(): Promise<AuthOAuthResult> {
     throw new Error("Sign in failed");
   }
 
-  const callbackPromise = waitForOAuthCallback(redirectUri, state);
+  const callbackPromise = waitForOAuthCallback(redirectUri, state, uiLocale);
   await shell.openExternal(authorizeUrl);
   const callback = await callbackPromise;
 
@@ -247,7 +259,7 @@ export function registerAuthIpc(): void {
       if (!payload || payload.provider !== "google") {
         throw new Error("Sign in failed");
       }
-      return startGoogleOAuth();
+      return startGoogleOAuth(payload.locale);
     },
   );
 

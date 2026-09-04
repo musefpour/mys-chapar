@@ -21,10 +21,6 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "host_permissions": [
-    "http://*/*",
-    "https://*/*",
-    "<all_urls>"
-  ],
+  "host_permissions": ["http://*/*", "https://*/*", "<all_urls>"],
   "permissions": []
 }

@@ -104,15 +104,15 @@ export function AppMenu() {
           : []),
       ],
       edit: [
-        { kind: "cmd", id: "edit.undo", label: "menu.undo" },
-        { kind: "cmd", id: "edit.redo", label: "menu.redo" },
+        { kind: "cmd", id: "edit.undo", label: "menu.undo", shortcut: shortcut(["Mod", "Z"]) },
+        { kind: "cmd", id: "edit.redo", label: "menu.redo", shortcut: shortcut(["Mod", "Shift", "Z"]) },
         { kind: "sep" },
-        { kind: "cmd", id: "edit.cut", label: "menu.cut" },
-        { kind: "cmd", id: "edit.copy", label: "menu.copy" },
-        { kind: "cmd", id: "edit.paste", label: "menu.paste" },
+        { kind: "cmd", id: "edit.cut", label: "menu.cut", shortcut: shortcut(["Mod", "X"]) },
+        { kind: "cmd", id: "edit.copy", label: "menu.copy", shortcut: shortcut(["Mod", "C"]) },
+        { kind: "cmd", id: "edit.paste", label: "menu.paste", shortcut: shortcut(["Mod", "V"]) },
         { kind: "cmd", id: "edit.pasteMatch", label: "menu.pasteMatch" },
         { kind: "cmd", id: "edit.delete", label: "menu.delete" },
-        { kind: "cmd", id: "edit.selectAll", label: "menu.selectAll" },
+        { kind: "cmd", id: "edit.selectAll", label: "menu.selectAll", shortcut: shortcut(["Mod", "A"]) },
       ],
       view: [
         { kind: "cmd", id: "view.fullScreen", label: "menu.fullScreen" },
@@ -217,7 +217,12 @@ export function AppMenu() {
         { kind: "sep" },
         { kind: "cmd", id: "help.docs", label: "menu.docs" },
         { kind: "cmd", id: "help.github", label: "menu.github" },
-        { kind: "cmd", id: "help.twitter", label: "menu.twitter" },
+        {
+          kind: "cmd",
+          id: "help.twitter",
+          label: "menu.twitter",
+          disabled: true,
+        },
         { kind: "cmd", id: "help.support", label: "menu.support" },
         { kind: "sep" },
         { kind: "cmd", id: "help.about", label: "menu.about" },
@@ -252,6 +257,36 @@ export function AppMenu() {
   const rootFlyout: RootId =
     flyout === "import" ? "file" : flyout === "developer" ? "view" : flyout === "region" ? "help" : flyout;
 
+  const nestedParent = tree[rootFlyout].find(
+    (item): item is Extract<MenuNode, { kind: "sub" }> =>
+      item.kind === "sub" && nested !== null && item.id === nested,
+  );
+
+  const layerRef = useRef<HTMLDivElement>(null);
+  const [nestedPos, setNestedPos] = useState<{ top: number; inlineStart: number } | null>(null);
+
+  const placeNested = (id: FlyoutId, trigger: HTMLElement | null) => {
+    setFlyout(id);
+    const isNested = id === "import" || id === "developer" || id === "region";
+    if (!isNested || !trigger || !layerRef.current) {
+      setNestedPos(null);
+      return;
+    }
+    const layerRect = layerRef.current.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    const rtl = getComputedStyle(layerRef.current).direction === "rtl";
+    setNestedPos({
+      top: triggerRect.top - layerRect.top,
+      inlineStart: rtl
+        ? layerRect.right - triggerRect.left + 4
+        : triggerRect.right - layerRect.left + 4,
+    });
+  };
+
+  useEffect(() => {
+    if (!nested) setNestedPos(null);
+  }, [nested]);
+
   return (
     <div className="app-menu" ref={rootRef}>
       <button
@@ -263,13 +298,14 @@ export function AppMenu() {
         title={t("menu.file")}
         onClick={() => {
           setFlyout("file");
+          setNestedPos(null);
           setOpen((value) => !value);
         }}
       >
         <MenuIcon />
       </button>
       {open && (
-        <div className="app-menu-layer">
+        <div className="app-menu-layer" ref={layerRef}>
           <div className="app-menu-root" role="menu">
             {(["file", "edit", "view", "help"] as const).map((id) => (
               <button
@@ -277,8 +313,14 @@ export function AppMenu() {
                 type="button"
                 role="menuitem"
                 className={rootFlyout === id ? "app-menu-root-item active" : "app-menu-root-item"}
-                onMouseEnter={() => setFlyout(id)}
-                onFocus={() => setFlyout(id)}
+                onMouseEnter={() => {
+                  setFlyout(id);
+                  setNestedPos(null);
+                }}
+                onFocus={() => {
+                  setFlyout(id);
+                  setNestedPos(null);
+                }}
               >
                 <span>{t(`menu.${id}` as MessageKey)}</span>
                 <span className="app-menu-caret" aria-hidden>
@@ -293,11 +335,29 @@ export function AppMenu() {
                 key={index}
                 item={item}
                 nested={nested}
-                onOpenSub={(id) => setFlyout(id)}
+                onOpenSub={placeNested}
                 onRun={run}
               />
             ))}
           </div>
+          {nestedParent && nestedPos ? (
+            <div
+              className="app-menu-nested"
+              role="menu"
+              style={{ top: nestedPos.top, insetInlineStart: nestedPos.inlineStart }}
+              onMouseEnter={() => setFlyout(nestedParent.id)}
+            >
+              {nestedParent.children.map((child, index) => (
+                <MenuRow
+                  key={index}
+                  item={child}
+                  nested={null}
+                  onOpenSub={placeNested}
+                  onRun={run}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -312,38 +372,28 @@ function MenuRow({
 }: {
   item: MenuNode;
   nested: FlyoutId | null;
-  onOpenSub: (id: FlyoutId) => void;
+  onOpenSub: (id: FlyoutId, trigger: HTMLElement | null) => void;
   onRun: (command: AppMenuCommand) => void;
 }) {
   const t = useT();
   if (item.kind === "sep") return <div className="app-menu-sep" role="separator" />;
   if (item.kind === "sub") {
+    const active = nested === item.id;
     return (
-      <div
-        className="app-menu-subwrap"
-        onMouseEnter={() => onOpenSub(item.id)}
-        onFocus={() => onOpenSub(item.id)}
+      <button
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={active}
+        className={active ? "app-menu-item has-sub active" : "app-menu-item has-sub"}
+        onMouseEnter={(event) => onOpenSub(item.id, event.currentTarget)}
+        onFocus={(event) => onOpenSub(item.id, event.currentTarget)}
       >
-        <button type="button" role="menuitem" className="app-menu-item has-sub">
-          <span>{t(item.label)}</span>
-          <span className="app-menu-caret" aria-hidden>
-            ›
-          </span>
-        </button>
-        {nested === item.id && (
-          <div className="app-menu-nested" role="menu">
-            {item.children.map((child, index) => (
-              <MenuRow
-                key={index}
-                item={child}
-                nested={null}
-                onOpenSub={onOpenSub}
-                onRun={onRun}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        <span>{t(item.label)}</span>
+        <span className="app-menu-caret" aria-hidden>
+          ›
+        </span>
+      </button>
     );
   }
   return (
@@ -356,7 +406,7 @@ function MenuRow({
       onMouseEnter={() => {
         if (nested === "import" || nested === "developer" || nested === "region") {
           const parent = nested === "import" ? "file" : nested === "developer" ? "view" : "help";
-          onOpenSub(parent);
+          onOpenSub(parent, null);
         }
       }}
       onClick={() => {

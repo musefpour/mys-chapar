@@ -16,6 +16,13 @@ import { AppMenu } from "./features/app-menu/AppMenu";
 import { useMenuCommands } from "./features/app-menu/useMenuCommands";
 import { buildMenuLabels } from "./features/app-menu/menu-labels";
 import { SettingsModal } from "./features/settings/SettingsModal";
+import { UpdateRequiredModal } from "./features/update/UpdateRequiredModal";
+import {
+  APP_VERSION,
+  isAppBlockedByForceUpdate,
+  shouldShowUpdateModal,
+  useUpdateStore,
+} from "./stores/update-store";
 import { useT } from "./i18n";
 
 function isMacDesktop(): boolean {
@@ -200,8 +207,15 @@ export default function App() {
   const sidebarOnRight = useUiStore((state) => state.sidebarOnRight);
   const toast = useUiStore((state) => state.toast);
   const hydratePrefs = useUiStore((state) => state.hydratePrefs);
+  const updateGate = useUpdateStore((state) => state.gate);
+  const checkOnStartup = useUpdateStore((state) => state.checkOnStartup);
+  const dismissSoftUpdate = useUpdateStore((state) => state.dismissSoftUpdate);
   useStatusBarShortcuts();
   useMenuCommands();
+
+  useEffect(() => {
+    void checkOnStartup();
+  }, [checkOnStartup]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -255,6 +269,29 @@ export default function App() {
   ]
     .filter(Boolean)
     .join(" ");
+
+  const forceBlocked = isAppBlockedByForceUpdate(updateGate);
+  const showUpdateModal = shouldShowUpdateModal(updateGate);
+  const updateConfig = updateGate.kind === "required" ? updateGate.config : null;
+  const stillChecking = updateGate.kind === "idle" || updateGate.kind === "checking";
+
+  if (stillChecking) {
+    return <div className="app-shell app-shell-blocked" aria-busy="true" />;
+  }
+
+  if (forceBlocked && updateConfig) {
+    return (
+      <div className="app-shell app-shell-blocked">
+        <UpdateRequiredModal
+          open
+          force
+          localVersion={APP_VERSION}
+          remoteVersion={updateConfig.version}
+          onClose={() => undefined}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -317,6 +354,15 @@ export default function App() {
       </div>
       <StatusBar />
       <SettingsModal />
+      {showUpdateModal && updateConfig ? (
+        <UpdateRequiredModal
+          open
+          force={false}
+          localVersion={APP_VERSION}
+          remoteVersion={updateConfig.version}
+          onClose={dismissSoftUpdate}
+        />
+      ) : null}
       {toast && (
         <div className="app-toast" role="status">
           {toast}

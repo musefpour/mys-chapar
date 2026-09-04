@@ -61,18 +61,22 @@ export type RegionId = "us" | "eu" | "asia";
 export interface AppPrefs {
   hardwareAcceleration: boolean;
   region: RegionId;
+  /** UI locale mirrored from the renderer (used by OAuth callback HTML). */
+  locale?: string;
 }
 
 export const DEFAULT_APP_PREFS: AppPrefs = {
   hardwareAcceleration: true,
   region: "us",
+  locale: "en",
 };
 
 export const HELP_LINKS = {
-  docs: "https://gitlab.abriment.com/mychapar/mychapar-web-electron",
-  github: "https://gitlab.abriment.com/mychapar/mychapar-web-electron",
-  twitter: "https://x.com",
-  support: "https://gitlab.abriment.com/mychapar/mychapar-web-electron/-/issues",
+  docs: "https://github.com/musefpour/mys-chapar",
+  github: "https://github.com/musefpour/mys-chapar",
+  /** Disabled in UI for now — no official account yet. */
+  twitter: "",
+  support: "https://myschapar.ir/",
 } as const;
 
 export const MAIN_MENU_COMMANDS = new Set<AppMenuCommand>([

@@ -1,4 +1,10 @@
-import { BrowserWindow, Menu, type Input, type MenuItemConstructorOptions } from "electron";
+import {
+  BrowserWindow,
+  Menu,
+  type ContextMenuParams,
+  type Input,
+  type MenuItemConstructorOptions,
+} from "electron";
 import {
   DEFAULT_MENU_LABELS,
   mergeMenuLabels,
@@ -34,7 +40,11 @@ export function setMenuCommandHandler(handler: MenuCommandHandler): void {
   dispatch = handler;
 }
 
-/** Native menu is only the macOS app menu (Quit / Hide). File/Edit/View/Help live in the in-app icon. */
+/**
+ * Native menu on macOS is the app menu plus Edit.
+ * Chromium only delivers ⌘C / ⌘V / ⌘X / ⌘A / ⌘Z when Edit items use roles.
+ * File / View / Help stay in the in-app icon.
+ */
 export function installAppMenu(labels?: Partial<MenuLabels> | null): void {
   currentLabels = mergeMenuLabels(labels);
   const l = currentLabels;
@@ -58,8 +68,47 @@ export function installAppMenu(labels?: Partial<MenuLabels> | null): void {
           { role: "quit" },
         ],
       },
+      {
+        label: l.edit,
+        submenu: [
+          { role: "undo", label: l.undo },
+          { role: "redo", label: l.redo },
+          { type: "separator" },
+          { role: "cut", label: l.cut },
+          { role: "copy", label: l.copy },
+          { role: "paste", label: l.paste },
+          { role: "pasteAndMatchStyle", label: l.pasteMatch },
+          { role: "delete", label: l.delete },
+          { type: "separator" },
+          { role: "selectAll", label: l.selectAll },
+        ],
+      },
     ]),
   );
+}
+
+/** Right-click copy/paste for inputs, textareas, and selected text. */
+export function popupEditContextMenu(win: BrowserWindow, params: ContextMenuParams): void {
+  const l = currentLabels;
+  const { editFlags, isEditable, selectionText } = params;
+  const hasSelection = Boolean(selectionText);
+  if (!isEditable && !hasSelection) return;
+
+  const items: MenuItemConstructorOptions[] = isEditable
+    ? [
+        { role: "undo", label: l.undo, enabled: editFlags.canUndo },
+        { role: "redo", label: l.redo, enabled: editFlags.canRedo },
+        { type: "separator" },
+        { role: "cut", label: l.cut, enabled: editFlags.canCut },
+        { role: "copy", label: l.copy, enabled: editFlags.canCopy },
+        { role: "paste", label: l.paste, enabled: editFlags.canPaste },
+        { role: "delete", label: l.delete, enabled: editFlags.canDelete },
+        { type: "separator" },
+        { role: "selectAll", label: l.selectAll, enabled: editFlags.canSelectAll },
+      ]
+    : [{ role: "copy", label: l.copy }];
+
+  Menu.buildFromTemplate(items).popup({ window: win });
 }
 
 function commandOrControl(input: Input): boolean {

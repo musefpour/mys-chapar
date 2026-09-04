@@ -7,6 +7,7 @@ import { useLocaleStore } from "../../stores/locale-store";
 import { useLibraryStore } from "../../stores/library-store";
 import { useThemeStore } from "../../stores/theme-store";
 import { useUiStore, type SettingsSection } from "../../stores/ui-store";
+import { useUpdateStore } from "../../stores/update-store";
 import { useFocusTrap } from "../../shared/ui/useFocusTrap";
 import { loadSettingsExtra, saveSettingsExtra, type SettingsExtra } from "./settings-extra";
 
@@ -266,9 +267,23 @@ function ActionBtn({
   );
 }
 
-function ExtLink({ label, onClick }: { label: string; onClick: () => void }) {
+function ExtLink({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <button type="button" className="settings-ext-link" onClick={onClick}>
+    <button
+      type="button"
+      className="settings-ext-link"
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? label : undefined}
+    >
       {label}
       <ExternalIcon />
     </button>
@@ -297,8 +312,11 @@ export function SettingsModal() {
   const showToast = useUiStore((state) => state.showToast);
   const dialogRef = useRef<HTMLDivElement>(null);
   const [extra, setExtra] = useState<SettingsExtra>(loadSettingsExtra);
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "done">("idle");
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "done" | "required" | "error">(
+    "idle",
+  );
   const [progress, setProgress] = useState(0);
+  const checkNow = useUpdateStore((state) => state.checkNow);
   useFocusTrap(dialogRef, open, { inertBackground: true });
 
   useEffect(() => {
@@ -318,17 +336,29 @@ export function SettingsModal() {
 
   useEffect(() => {
     if (updateStatus !== "checking") return;
+    let cancelled = false;
     const started = Date.now();
     const id = window.setInterval(() => {
-      const next = Math.min(100, Math.round(((Date.now() - started) / 1400) * 100));
+      const next = Math.min(92, Math.round(((Date.now() - started) / 900) * 100));
       setProgress(next);
-      if (next >= 100) {
-        window.clearInterval(id);
-        setUpdateStatus("done");
-      }
     }, 70);
-    return () => window.clearInterval(id);
-  }, [updateStatus]);
+
+    void checkNow().then((outcome) => {
+      if (cancelled) return;
+      window.clearInterval(id);
+      setProgress(100);
+      if (outcome === "latest") setUpdateStatus("done");
+      else if (outcome === "required") {
+        setUpdateStatus("required");
+        setSettingsOpen(false);
+      } else setUpdateStatus("error");
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [updateStatus, checkNow, setSettingsOpen]);
 
   if (!open) return null;
 
@@ -603,7 +633,11 @@ export function SettingsModal() {
                 ) : (
                   <>
                     <p className="settings-update-status">
-                      {updateStatus === "done" ? t("menu.upToDate") : t("settings.updateLatest")}
+                      {updateStatus === "error"
+                        ? t("settings.updateFailed")
+                        : updateStatus === "done"
+                          ? t("menu.upToDate")
+                          : t("settings.updateLatest")}
                     </p>
                     <ActionBtn
                       onClick={() => {
@@ -656,10 +690,14 @@ export function SettingsModal() {
                   </div>
                 </dl>
                 <div className="settings-about-links">
-                  <ExtLink label={t("settings.aboutWebsite")} onClick={() => openHelp("help.docs")} />
-                  <ExtLink label={t("settings.aboutTwitter")} onClick={() => openHelp("help.twitter")} />
+                  <ExtLink label={t("settings.aboutWebsite")} onClick={() => openHelp("help.support")} />
+                  <ExtLink
+                    label={t("settings.aboutTwitter")}
+                    onClick={() => openHelp("help.twitter")}
+                    disabled
+                  />
                   <ExtLink label={t("settings.aboutDocs")} onClick={() => openHelp("help.github")} />
-                  <ExtLink label={t("settings.aboutIssues")} onClick={() => openHelp("help.support")} />
+                  <ExtLink label={t("settings.aboutIssues")} onClick={() => openHelp("help.docs")} />
                 </div>
               </div>
             )}

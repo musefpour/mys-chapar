@@ -131,6 +131,9 @@
 
 * {
   box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 html,
@@ -145,6 +148,12 @@ body,
   font-family: var(--font);
 }
 
+/* Hide accidental selection flash on chrome UI */
+::selection {
+  background: transparent;
+  color: inherit;
+}
+
 button,
 input,
 select,
@@ -153,46 +162,67 @@ textarea {
   color: inherit;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-label,
 button,
-nav,
-.tab,
-.sidebar-tabs,
-.tree-label,
-.tree-menu,
-.request-tabs-bar,
-.request-tab-title,
-.method-tag,
-.modal-header,
-.field-label,
-.code-panel-title,
-.status-bar,
-.bottom-panel-tabs,
-.response-tabs,
-.kv-head,
-.kv-table th,
-.titlebar-menu-label,
-.sidebar-item-text {
-  user-select: none;
-  -webkit-user-select: none;
+a,
+summary,
+label,
+[role="button"],
+[role="menuitem"],
+[role="tab"],
+[role="option"] {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-input,
+button:focus,
+button:focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus,
+[role="menuitem"]:focus-visible,
+[role="tab"]:focus,
+[role="tab"]:focus-visible {
+  outline: none;
+}
+
+/* Only real editable surfaces may be selected / copied */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 textarea,
-select,
-pre,
-code,
+[contenteditable="true"],
 .kv-cell-input,
 .modal-input,
-.curl-input {
-  user-select: text;
+.curl-input,
+.url-input,
+.raw-code-input,
+.raw-body,
+.code-panel-pre,
+.code-block,
+.response-body,
+.response-body-pre,
+.response-body-pane,
+.allow-text-select {
   -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"])::selection,
+textarea::selection,
+[contenteditable="true"]::selection,
+.kv-cell-input::selection,
+.modal-input::selection,
+.curl-input::selection,
+.url-input::selection,
+.raw-code-input::selection,
+.raw-body::selection,
+.code-panel-pre::selection,
+.code-block::selection,
+.response-body::selection,
+.response-body-pre::selection,
+.response-body-pane::selection,
+.allow-text-select::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: inherit;
 }
 
 .app-shell {
@@ -685,6 +715,15 @@ code,
   overflow: auto;
 }
 
+.app-menu-nested {
+  position: absolute;
+  z-index: 3;
+  min-width: 220px;
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  margin: 0;
+}
+
 .app-menu-root-item,
 .app-menu-item {
   width: 100%;
@@ -706,7 +745,8 @@ code,
 .app-menu-root-item.active,
 .app-menu-root-item:hover,
 .app-menu-item:hover:not(:disabled),
-.app-menu-item.has-sub:hover {
+.app-menu-item.has-sub:hover,
+.app-menu-item.has-sub.active {
   background: var(--accent-soft);
 }
 
@@ -744,18 +784,6 @@ code,
 .app-menu-check {
   color: var(--accent);
   font-size: 0.78rem;
-}
-
-.app-menu-subwrap {
-  position: relative;
-}
-
-.app-menu-nested {
-  position: absolute;
-  top: 0;
-  inset-inline-start: calc(100% + 4px);
-  min-width: 220px;
-  z-index: 2;
 }
 
 .app-toast {
@@ -1204,8 +1232,13 @@ code,
   font-size: 0.86rem;
 }
 
-.settings-ext-link:hover {
+.settings-ext-link:hover:not(:disabled) {
   color: var(--accent);
+}
+
+.settings-ext-link:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .about-modal {
@@ -3960,9 +3993,11 @@ html[dir="rtl"][data-theme="dark"] .variables-panel {
   }
 }
 
+.modal-actions-left,
 .modal-actions-right {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .modal-header {
@@ -3992,6 +4027,21 @@ html[dir="rtl"][data-theme="dark"] .variables-panel {
 
 .modal-action-start {
   margin-inline-end: auto;
+}
+
+.app-shell-blocked {
+  min-height: 100vh;
+}
+
+.update-required-backdrop {
+  z-index: 80;
+}
+
+.update-required-force-hint {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--danger, #c0392b);
+  line-height: 1.45;
 }
 
 .modal-input {

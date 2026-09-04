@@ -1,9 +1,7 @@
+import { resolveApiBaseUrl } from "@shared/api-base";
 import { getAccessToken } from "./auth-client";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:1700/api").replace(
-  /\/$/,
-  "",
-);
+const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 export type CloudMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 

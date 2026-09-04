@@ -177,6 +177,8 @@ export const IPC = {
   MENU_COMMAND: "mychapar:menu-command",
   MENU_INVOKE: "mychapar:menu-invoke",
   MENU_SET_LABELS: "mychapar:menu-set-labels",
+  CLIPBOARD_READ_TEXT: "mychapar:clipboard-read-text",
+  CLIPBOARD_WRITE_TEXT: "mychapar:clipboard-write-text",
   GET_PREFS: "mychapar:get-prefs",
   SET_PREFS: "mychapar:set-prefs",
   PREFS_CHANGED: "mychapar:prefs-changed",
@@ -205,6 +207,8 @@ export interface AuthOAuthResult {
 
 export interface AuthOAuthStartPayload {
   provider: Exclude<AuthProvider, "email">;
+  /** App UI locale (e.g. "fa", "en") — used for the OAuth browser success page. */
+  locale?: string;
 }
 
 export type AuthEmailAction = "login" | "register" | "logout";
@@ -312,6 +316,8 @@ export interface MyChaparApi {
   invokeMenu?: (command: AppMenuCommand) => Promise<void>;
   onMenuCommand?: (callback: (command: AppMenuCommand) => void) => () => void;
   setMenuLabels?: (labels: MenuLabels) => void;
+  readClipboardText?: () => Promise<string>;
+  writeClipboardText?: (text: string) => Promise<void>;
   getPrefs?: () => Promise<AppPrefs>;
   setPrefs?: (patch: Partial<AppPrefs>) => Promise<AppPrefs>;
   onPrefsChanged?: (callback: (prefs: AppPrefs) => void) => () => void;

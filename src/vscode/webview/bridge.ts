@@ -142,6 +142,8 @@ function installVsCodeBridge(): void {
     setMenuLabels: (labels: MenuLabels) => {
       vscode.postMessage({ type: IPC.MENU_SET_LABELS, payload: labels });
     },
+    readClipboardText: (): Promise<string> => rpc(IPC.CLIPBOARD_READ_TEXT),
+    writeClipboardText: (text: string): Promise<void> => rpc(IPC.CLIPBOARD_WRITE_TEXT, text),
     getPrefs: (): Promise<AppPrefs> => rpc(IPC.GET_PREFS),
     setPrefs: (patch: Partial<AppPrefs>): Promise<AppPrefs> => rpc(IPC.SET_PREFS, patch),
     onPrefsChanged: (callback) => {

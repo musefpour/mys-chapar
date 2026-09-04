@@ -1,4 +1,14 @@
-import { BrowserWindow, app, dialog, ipcMain, nativeImage, shell, type Input, type NativeImage } from "electron";
+import {
+  BrowserWindow,
+  app,
+  clipboard,
+  dialog,
+  ipcMain,
+  nativeImage,
+  shell,
+  type Input,
+  type NativeImage,
+} from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -18,6 +28,7 @@ import {
   currentMenuLabels,
   installAppMenu,
   menuCommandFromInput,
+  popupEditContextMenu,
   setMenuCommandHandler,
   zoomStep,
 } from "./menu";
@@ -144,7 +155,7 @@ async function handleMenuCommand(
       void shell.openExternal(HELP_LINKS.github);
       return;
     case "help.twitter":
-      void shell.openExternal(HELP_LINKS.twitter);
+      // Twitter / X link is disabled until an official account exists.
       return;
     case "help.support":
       void shell.openExternal(HELP_LINKS.support);
@@ -234,6 +245,10 @@ function createWindow(): void {
     return { action: "deny" };
   });
 
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    popupEditContextMenu(mainWindow, params);
+  });
+
   mainWindow.webContents.on("before-input-event", (event, input) => {
     if (isReloadShortcut(input) || isNewRunnerShortcut(input)) {
       event.preventDefault();
@@ -265,6 +280,12 @@ function registerMenuIpc(): void {
 
   ipcMain.on(IPC.MENU_SET_LABELS, (_event, labels: Partial<MenuLabels> | undefined) => {
     installAppMenu(labels);
+  });
+
+  ipcMain.handle(IPC.CLIPBOARD_READ_TEXT, () => clipboard.readText());
+
+  ipcMain.handle(IPC.CLIPBOARD_WRITE_TEXT, (_event, text: unknown) => {
+    clipboard.writeText(typeof text === "string" ? text : String(text ?? ""));
   });
 
   ipcMain.handle(IPC.GET_PREFS, () => loadPrefs());

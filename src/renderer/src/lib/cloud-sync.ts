@@ -19,8 +19,15 @@ interface CloudWorkspace {
   id: string;
   name: string;
   kind?: string;
+  /** Some backends expose workspace kind as `type`. */
+  type?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+function workspaceKindOf(dto: Pick<CloudWorkspace, "kind" | "type"> | null | undefined): WorkspaceKind {
+  const raw = (dto?.kind ?? dto?.type ?? "").toString().trim().toLowerCase();
+  return raw === "team" ? "team" : "personal";
 }
 
 interface CloudCollection {
@@ -56,7 +63,18 @@ interface CloudPreferences {
 }
 
 let hydrating = false;
+let hydrateGeneration = 0;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Cancel pending pushes and invalidate an in-flight hydrate (call on sign-out). */
+export function stopCloudSync(): void {
+  hydrateGeneration += 1;
+  hydrating = false;
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+}
 
 function isLoggedIn(): boolean {
   return Boolean(getAccessToken());
@@ -152,7 +170,7 @@ async function ensureWorkspace(
   const byId = server.find((item) => item.id === local.id);
   if (byId) return byId;
   const kind: WorkspaceKind = local.kind === "team" ? "team" : "personal";
-  const byKind = server.find((item) => (item.kind ?? "personal") === kind);
+  const byKind = server.find((item) => workspaceKindOf(item) === kind);
   if (byKind) return byKind;
   const created = await cloudJson<CloudWorkspace>("POST", "/v1/workspaces", {
     name: local.name,
@@ -163,103 +181,163 @@ async function ensureWorkspace(
 
 export async function hydrateFromCloud(): Promise<void> {
   if (!isLoggedIn() || hydrating) return;
+  const generation = ++hydrateGeneration;
   hydrating = true;
   try {
     const local = useLibraryStore.getState();
     const wsResult = await cloudJson<CloudWorkspace>("GET", "/v1/workspaces");
-    if (!wsResult.ok) return;
-    let serverWorkspaces = cloudItems(wsResult);
+    if (generation !== hydrateGeneration || !isLoggedIn()) return;
+    let serverWorkspaces = wsResult.ok ? cloudItems(wsResult) : [];
+    let nextWorkspaces: Workspace[] = local.workspaces;
+    let activeWorkspaceId = local.activeWorkspaceId;
 
-    const personalLocal =
-      local.workspaces.find((item) => item.kind === "personal") ?? local.workspaces[0];
-    const teamLocal = local.workspaces.find((item) => item.kind === "team");
-    if (personalLocal) {
-      const mapped = await ensureWorkspace(personalLocal, serverWorkspaces);
-      if (mapped && !serverWorkspaces.some((item) => item.id === mapped.id)) {
-        serverWorkspaces = [...serverWorkspaces, mapped];
+    if (wsResult.ok) {
+      const personalLocal =
+        local.workspaces.find((item) => item.kind === "personal") ?? local.workspaces[0];
+      const teamLocal =
+        local.workspaces.find((item) => item.kind === "team") ??
+        ({
+          id: "local_team",
+          name: "Team Workspace",
+          kind: "team",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          collections: [],
+          activeCollectionId: null,
+        } satisfies Workspace);
+
+      if (personalLocal) {
+        const mapped = await ensureWorkspace(personalLocal, serverWorkspaces);
+        if (mapped && !serverWorkspaces.some((item) => item.id === mapped.id)) {
+          serverWorkspaces = [...serverWorkspaces, mapped];
+        }
+      }
+      // Always keep a Team Workspace after sign-in (even when still empty).
+      {
+        const mapped = await ensureWorkspace(teamLocal, serverWorkspaces);
+        if (mapped && !serverWorkspaces.some((item) => item.id === mapped.id)) {
+          serverWorkspaces = [...serverWorkspaces, mapped];
+        }
+      }
+
+      if (serverWorkspaces.length) {
+        const kindTarget = (kind: WorkspaceKind): CloudWorkspace =>
+          serverWorkspaces.find((item) => workspaceKindOf(item) === kind) ?? serverWorkspaces[0];
+
+        for (const workspace of local.workspaces) {
+          const target = isCloudWorkspaceId(workspace.id)
+            ? serverWorkspaces.find((item) => item.id === workspace.id) ?? kindTarget(workspace.kind)
+            : kindTarget(workspace.kind);
+          for (const collection of workspace.collections) {
+            if (isPlaceholderCollection(collection)) continue;
+            await upsertCollection(target.id, collection);
+          }
+        }
+
+        for (const entry of local.history) {
+          const target =
+            (entry.workspaceId && serverWorkspaces.find((item) => item.id === entry.workspaceId)) ||
+            kindTarget("personal");
+          await cloudJson("POST", "/v1/history", {
+            id: entry.id,
+            workspaceId: target.id,
+            collectionId: entry.collectionId ?? undefined,
+            requestNodeId: entry.requestNodeId ?? undefined,
+            request: entry.request,
+            response: entry.savedResponse ?? entry.response ?? undefined,
+            error: entry.error,
+            createdAt: entry.createdAt,
+          });
+        }
+
+        nextWorkspaces = [];
+        for (const remote of serverWorkspaces) {
+          const list = await cloudJson<CloudCollection>(
+            "GET",
+            `/v1/workspaces/${remote.id}/collections`,
+          );
+          const collections = cloudItems(list)
+            .map(collectionFromCloud)
+            .filter((item): item is Collection => item !== null);
+          const ensured = collections.length
+            ? collections
+            : [
+                {
+                  id: `local_${remote.id}`,
+                  name: "My Collection",
+                  createdAt: remote.createdAt ?? new Date().toISOString(),
+                  updatedAt: remote.updatedAt ?? new Date().toISOString(),
+                  favorite: false,
+                  variables: defaultCollectionVariables(),
+                  children: [],
+                } satisfies Collection,
+              ];
+          nextWorkspaces.push({
+            id: remote.id,
+            name: remote.name,
+            kind: workspaceKindOf(remote),
+            createdAt: remote.createdAt ?? new Date().toISOString(),
+            updatedAt: remote.updatedAt ?? new Date().toISOString(),
+            collections: ensured,
+            activeCollectionId: ensured[0]?.id ?? null,
+          });
+        }
+
+        // Safety net: if the API omitted team (e.g. older accounts), keep one in the UI.
+        if (!nextWorkspaces.some((item) => item.kind === "team")) {
+          const created = await ensureWorkspace(teamLocal, serverWorkspaces);
+          if (created) {
+            nextWorkspaces.push({
+              id: created.id,
+              name: created.name || "Team Workspace",
+              kind: "team",
+              createdAt: created.createdAt ?? new Date().toISOString(),
+              updatedAt: created.updatedAt ?? new Date().toISOString(),
+              collections: [
+                {
+                  id: `local_${created.id}`,
+                  name: "My Collection",
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  favorite: false,
+                  variables: defaultCollectionVariables(),
+                  children: [],
+                },
+              ],
+              activeCollectionId: `local_${created.id}`,
+            });
+          }
+        }
       }
     }
-    if (teamLocal && teamLocal.collections.some((item) => !isPlaceholderCollection(item))) {
-      const mapped = await ensureWorkspace(teamLocal, serverWorkspaces);
-      if (mapped && !serverWorkspaces.some((item) => item.id === mapped.id)) {
-        serverWorkspaces = [...serverWorkspaces, mapped];
-      }
-    }
-    if (!serverWorkspaces.length) return;
 
-    const kindTarget = (kind: WorkspaceKind): CloudWorkspace =>
-      serverWorkspaces.find((item) => (item.kind ?? "personal") === kind) ?? serverWorkspaces[0];
-
-    for (const workspace of local.workspaces) {
-      const target = isCloudWorkspaceId(workspace.id)
-        ? serverWorkspaces.find((item) => item.id === workspace.id) ?? kindTarget(workspace.kind)
-        : kindTarget(workspace.kind);
-      for (const collection of workspace.collections) {
-        if (isPlaceholderCollection(collection)) continue;
-        await upsertCollection(target.id, collection);
-      }
-    }
-
-    for (const entry of local.history) {
-      const target =
-        (entry.workspaceId && serverWorkspaces.find((item) => item.id === entry.workspaceId)) ||
-        kindTarget("personal");
-      await cloudJson("POST", "/v1/history", {
-        id: entry.id,
-        workspaceId: target.id,
-        collectionId: entry.collectionId ?? undefined,
-        requestNodeId: entry.requestNodeId ?? undefined,
-        request: entry.request,
-        response: entry.savedResponse ?? entry.response ?? undefined,
-        error: entry.error,
-        createdAt: entry.createdAt,
-      });
-    }
-
-    const nextWorkspaces: Workspace[] = [];
-    for (const remote of serverWorkspaces) {
-      const list = await cloudJson<CloudCollection>(
-        "GET",
-        `/v1/workspaces/${remote.id}/collections`,
-      );
-      const collections = cloudItems(list)
-        .map(collectionFromCloud)
-        .filter((item): item is Collection => item !== null);
-      const ensured = collections.length ? collections : [{
-        id: `local_${remote.id}`,
-        name: "My Collection",
-        createdAt: remote.createdAt ?? new Date().toISOString(),
-        updatedAt: remote.updatedAt ?? new Date().toISOString(),
-        favorite: false,
-        variables: defaultCollectionVariables(),
-        children: [],
-      } satisfies Collection];
-      nextWorkspaces.push({
-        id: remote.id,
-        name: remote.name,
-        kind: remote.kind === "team" ? "team" : "personal",
-        createdAt: remote.createdAt ?? new Date().toISOString(),
-        updatedAt: remote.updatedAt ?? new Date().toISOString(),
-        collections: ensured,
-        activeCollectionId: ensured[0]?.id ?? null,
-      });
-    }
-
+    // Always pull history from the server after sign-in (independent of workspace sync).
     const historyResult = await cloudJson<CloudHistory>("GET", "/v1/history");
-    const remoteHistory = cloudItems(historyResult)
-      .map(historyFromCloud)
-      .filter((item): item is HistoryEntry => item !== null);
-    const mergedHistory = [
-      ...remoteHistory,
-      ...local.history.filter((entry) => !remoteHistory.some((item) => item.id === entry.id)),
-    ].slice(0, 100);
+    let mergedHistory = local.history;
+    if (historyResult.ok) {
+      const remoteHistory = cloudItems(historyResult)
+        .map(historyFromCloud)
+        .filter((item): item is HistoryEntry => item !== null);
+      const byId = new Map<string, HistoryEntry>();
+      for (const entry of remoteHistory) byId.set(entry.id, entry);
+      // Keep any local-only entries that failed to upload earlier.
+      for (const entry of local.history) {
+        if (!byId.has(entry.id)) byId.set(entry.id, entry);
+      }
+      mergedHistory = [...byId.values()]
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+        .slice(0, 100);
+    }
 
     const prefs = await cloudJson<CloudPreferences>("GET", "/v1/users/me/preferences");
+    if (generation !== hydrateGeneration || !isLoggedIn()) return;
     const prefItem = cloudItem(prefs);
-    let activeWorkspaceId =
-      nextWorkspaces.find((item) => item.id === prefItem?.activeWorkspaceId)?.id ??
-      nextWorkspaces.find((item) => item.kind === "personal")?.id ??
-      nextWorkspaces[0].id;
+    if (nextWorkspaces.length) {
+      activeWorkspaceId =
+        nextWorkspaces.find((item) => item.id === prefItem?.activeWorkspaceId)?.id ??
+        nextWorkspaces.find((item) => item.kind === "personal")?.id ??
+        nextWorkspaces[0].id;
+    }
 
     useLibraryStore.getState().applyCloudSnapshot(nextWorkspaces, activeWorkspaceId, mergedHistory);
 
@@ -270,7 +348,7 @@ export async function hydrateFromCloud(): Promise<void> {
       useLocaleStore.getState().setLocale(prefItem.locale, { skipCloud: true });
     }
   } finally {
-    hydrating = false;
+    if (generation === hydrateGeneration) hydrating = false;
   }
 }
 

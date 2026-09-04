@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { readClipboardText } from "../../lib/share-request";
 import { useFocusTrap } from "../../shared/ui/useFocusTrap";
 import { useT } from "../../i18n";
 
@@ -22,6 +23,32 @@ export function CurlImportModal({ open, onClose, onImport }: CurlImportModalProp
   const valueRef = useRef(value);
   valueRef.current = value;
   useFocusTrap(dialogRef, open, { inertBackground: true });
+
+  const insertText = (text: string) => {
+    const el = textareaRef.current;
+    const current = valueRef.current;
+    const start = el?.selectionStart ?? current.length;
+    const end = el?.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + text + current.slice(end);
+    setValue(next);
+    setError(null);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      const pos = start + text.length;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  const pasteFromClipboard = async () => {
+    const text = await readClipboardText();
+    if (text) {
+      insertText(text);
+      return;
+    }
+    textareaRef.current?.focus();
+    void window.mychapar?.invokeMenu?.("edit.paste");
+  };
 
   const submit = () => {
     const trimmed = valueRef.current.trim();
@@ -105,16 +132,27 @@ export function CurlImportModal({ open, onClose, onImport }: CurlImportModalProp
         {error && <p className="form-error">{error}</p>}
 
         <div className="modal-actions">
-          <button
-            type="button"
-            className="secondary-btn flat"
-            onClick={() => {
-              setValue(SAMPLE);
-              setError(null);
-            }}
-          >
-            {t("openapi.insertSample")}
-          </button>
+          <div className="modal-actions-left">
+            <button
+              type="button"
+              className="secondary-btn flat"
+              onClick={() => {
+                void pasteFromClipboard();
+              }}
+            >
+              {t("menu.paste")}
+            </button>
+            <button
+              type="button"
+              className="secondary-btn flat"
+              onClick={() => {
+                setValue(SAMPLE);
+                setError(null);
+              }}
+            >
+              {t("openapi.insertSample")}
+            </button>
+          </div>
           <div className="modal-actions-right">
             <button type="button" className="secondary-btn flat" onClick={onClose}>
               {t("common.cancel")}

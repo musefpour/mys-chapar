@@ -1,10 +1,8 @@
 import { ipcMain } from "electron";
+import { resolveApiBaseUrl } from "@shared/api-base";
 import { IPC, type CloudFetchPayload, type CloudFetchResult } from "@shared/types";
 
-const API_BASE = (process.env.VITE_API_BASE_URL ?? "http://127.0.0.1:1700/api").replace(
-  /\/$/,
-  "",
-);
+const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL as string | undefined);
 
 export function registerCloudIpc(): void {
   ipcMain.handle(

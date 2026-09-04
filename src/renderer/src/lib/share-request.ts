@@ -47,6 +47,42 @@ export async function copyText(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
+    // Electron / extension hosts often deny the web clipboard API.
+  }
+  try {
+    await window.mychapar?.writeClipboardText?.(text);
+    return true;
+  } catch {
+    // continue
+  }
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    textarea.remove();
+    return ok;
+  } catch {
     return false;
   }
+}
+
+export async function readClipboardText(): Promise<string> {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) return text;
+  } catch {
+    // continue
+  }
+  try {
+    const text = await window.mychapar?.readClipboardText?.();
+    if (text) return text;
+  } catch {
+    // continue
+  }
+  return "";
 }

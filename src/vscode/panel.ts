@@ -163,6 +163,11 @@ async function dispatch(
     case IPC.MENU_INVOKE:
       await handleMenu(context, panel, payload);
       return undefined;
+    case IPC.CLIPBOARD_READ_TEXT:
+      return vscode.env.clipboard.readText();
+    case IPC.CLIPBOARD_WRITE_TEXT:
+      await vscode.env.clipboard.writeText(typeof payload === "string" ? payload : String(payload ?? ""));
+      return undefined;
     default:
       throw new Error(`Unknown message: ${type}`);
   }
@@ -244,7 +249,7 @@ async function handleMenu(
       await vscode.env.openExternal(vscode.Uri.parse(HELP_LINKS.github));
       return;
     case "help.twitter":
-      await vscode.env.openExternal(vscode.Uri.parse(HELP_LINKS.twitter));
+      // Twitter / X link is disabled until an official account exists.
       return;
     case "help.support":
       await vscode.env.openExternal(vscode.Uri.parse(HELP_LINKS.support));

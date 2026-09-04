@@ -12,9 +12,9 @@ interface OpenApiImportModalProps {
 }
 
 const SAMPLES = [
-  "https://api.checkits.ir/swagger-ui/index.html",
-  "https://api.checkits.ir/v3/api-docs",
-  "https://api.javaherishams.ir/v3/api-docs",
+  "https://api.myschapar.ir/swagger-ui/index.html",
+  "https://api.myschapar.ir/v3/api-docs",
+  "https://api.myschapar.ir/v3/api-docs",
   "https://petstore3.swagger.io/api/v3/openapi.json",
 ] as const;
 

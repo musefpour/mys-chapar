@@ -2,6 +2,9 @@
  * Auth API adapter — talks to mychapar-backend-java `/api/v1/auth`.
  * Function signatures stay as in docs/AUTH.md.
  */
+import { resolveApiBaseUrl } from "@shared/api-base";
+import { LOCALE_STORAGE_KEY } from "../i18n/locales";
+import { useLocaleStore } from "../stores/locale-store";
 
 export type AuthProvider = "google" | "email";
 
@@ -23,10 +26,7 @@ export interface AuthSession {
 const SESSION_KEY = "mychapar.auth.session";
 const USERS_KEY = "mychapar.auth.users";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:1700/api").replace(
-  /\/$/,
-  "",
-);
+const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 interface BackendAuthBody {
   status?: boolean;
@@ -169,23 +169,6 @@ function sessionFromBody(body: BackendAuthBody, fallbackProvider: AuthProvider):
   };
 }
 
-export async function signInWithProvider(provider: Exclude<AuthProvider, "email">): Promise<AuthUser> {
-  if (!window.mychapar?.startOAuth) {
-    throw new Error(
-      "Sign in with Google needs the auth backend. See docs/AUTH.md.",
-    );
-  }
-  const result = await window.mychapar.startOAuth({ provider });
-  const session: AuthSession = {
-    user: result.user,
-    accessToken: result.accessToken,
-    refreshToken: result.refreshToken,
-    expiresAt: Date.now() + result.expiresIn * 1000,
-  };
-  persistSession(session);
-  return session.user;
-}
-
 function persistHostSession(result: {
   user: AuthUser;
   accessToken: string;
@@ -200,6 +183,38 @@ function persistHostSession(result: {
   };
   persistSession(session);
   return session.user;
+}
+
+function resolveClientLocale(): string {
+  try {
+    const fromStore = useLocaleStore.getState().locale;
+    if (fromStore) return fromStore;
+  } catch {
+    // ignore
+  }
+  try {
+    const saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (saved?.trim()) return saved.trim();
+  } catch {
+    // ignore
+  }
+  if (typeof document !== "undefined") {
+    const fromDom =
+      document.documentElement.dataset.locale || document.documentElement.lang;
+    if (fromDom?.trim()) return fromDom.trim();
+  }
+  return "en";
+}
+
+export async function signInWithProvider(provider: Exclude<AuthProvider, "email">): Promise<AuthUser> {
+  if (!window.mychapar?.startOAuth) {
+    throw new Error(
+      "Sign in with Google needs the auth backend. See docs/AUTH.md.",
+    );
+  }
+  const locale = resolveClientLocale();
+  const result = await window.mychapar.startOAuth({ provider, locale });
+  return persistHostSession(result);
 }
 
 function rethrowHostError(error: unknown): never {
@@ -269,14 +284,14 @@ export async function registerWithEmail(
   return session.user;
 }
 
-export async function logoutFromServer(): Promise<void> {
-  const session = readSession();
-  if (!session?.refreshToken) return;
+export async function logoutFromServer(refreshToken?: string | null): Promise<void> {
+  const token = refreshToken ?? readSession()?.refreshToken;
+  if (!token) return;
   try {
     if (window.mychapar?.authEmail) {
       await window.mychapar.authEmail({
         action: "logout",
-        refreshToken: session.refreshToken,
+        refreshToken: token,
       });
       return;
     }
@@ -284,7 +299,7 @@ export async function logoutFromServer(): Promise<void> {
       "/v1/auth/logout",
       {
         method: "POST",
-        body: JSON.stringify({ refreshToken: session.refreshToken }),
+        body: JSON.stringify({ refreshToken: token }),
       },
       "Sign in failed",
     );

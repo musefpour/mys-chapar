@@ -47,6 +47,9 @@ export const useLocaleStore = create<LocaleState>((set) => {
         // ignore
       }
       set({ locale: id });
+      // Keep main-process prefs in sync so the OAuth browser page can localize
+      // even if the IPC payload omits locale.
+      void window.mychapar?.setPrefs?.({ locale: id });
       if (!options?.skipCloud) {
         void import("../lib/cloud-sync").then((mod) => mod.queuePreferencesPush());
       }
