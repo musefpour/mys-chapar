@@ -2,6 +2,10 @@
 
 کلاینت HTTP دسکتاپ (React + TypeScript)، افزونه کروم، و اکستنشن VS Code.
 
+![فضای کار MYs Chapar](docs/images/workspace.png)
+
+راهنمای تصویری: [docs/GUIDE.md](./docs/GUIDE.md)
+
 ## اجرا در حالت توسعه
 
 ```bash
