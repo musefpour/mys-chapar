@@ -166,7 +166,7 @@ try {
         "30",
         "-H",
         "Expect:",
-        "-#"
+        "-#",
         "-T",
         file,
         ...authHeader,
