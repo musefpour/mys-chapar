@@ -21,7 +21,13 @@
     "dist:win": "npm run build && electron-builder --win",
     "dist:linux": "npm run build && electron-builder --linux",
     "release": "npm run dist",
-    "خروجی": "npm run dist"
+    "خروجی": "npm run dist",
+    "bump-version": "node scripts/bump-version.mjs",
+    "publish-release": "node scripts/publish-release.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/musefpour/mys-chapar.git"
   },
   "build": {
     "appId": "com.mychapar.app",

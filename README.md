@@ -35,7 +35,18 @@ npm run dist:chrome
 npm run dist:vscode
 ```
 
-فایل‌های آماده در `release/` قرار می‌گیرند (از جمله `release/chrome-extension`، `My Chapar-*-chrome.zip`، `release/vscode-extension` و `MYs Chapar-*-vscode.vsix`).
+فایل‌های آماده در `release/` قرار می‌گیرند (از جمله `release/chrome-extension`، `My Chapar-*-chrome.zip`، `release/vscode-extension` و `MYs Chapar-*-vscode.vsix`). این پوشه را در git commit نکنید.
+
+## انتشار نسخه روی GitHub
+
+```bash
+npm run bump-version -- patch    # یا minor / major / 1.2.3
+npm run dist
+git add -u && git commit -m "Release v$(node -p 'require("./package.json").version')"
+npm run publish-release
+```
+
+اسکریپت تگ `vX.Y.Z` می‌سازد، پوش می‌کند، و فایل‌های `release/` را به [Releases](https://github.com/musefpour/mys-chapar/releases) آپلود می‌کند.
 
 ورود و ثبت‌نام (Google / ایمیل): [docs/AUTH.md](./docs/AUTH.md)
 
