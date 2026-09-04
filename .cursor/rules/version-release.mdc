@@ -18,11 +18,11 @@ When the user says «ورژن بده» / «release» / «publish», run this flo
 2. `npm run dist` — writes versioned files into `release/`.
 3. Commit **only** the version bump (never `release/`).
 4. Working tree must be clean, then `npm run publish-release`
-   — tags `vX.Y.Z`, pushes, creates the GitHub Release, uploads:
+   — tags `vX.Y.Z`, pushes, creates the GitHub Release, uploads chrome/vsix first, then:
+   - `MYs Chapar-X.Y.Z-chrome.zip`
+   - `MYs Chapar-X.Y.Z-vscode.vsix`
    - `MYs Chapar-X.Y.Z-arm64.dmg`
    - `MYs Chapar-X.Y.Z-win.zip`
    - `mychapar-linux-X.Y.Z.zip`
-   - `MYs Chapar-X.Y.Z-chrome.zip`
-   - `MYs Chapar-X.Y.Z-vscode.vsix`
 
 If `release/` already has all five files for the **current** `package.json` version and that tag is not fully published, skip bump/dist and only run `publish-release`.

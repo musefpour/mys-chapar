@@ -55,11 +55,11 @@ function repoSlug() {
 
 function expectedAssets() {
   return [
+    `MYs Chapar-${version}-chrome.zip`,
+    `MYs Chapar-${version}-vscode.vsix`,
     `MYs Chapar-${version}-arm64.dmg`,
     `MYs Chapar-${version}-win.zip`,
     `mychapar-linux-${version}.zip`,
-    `MYs Chapar-${version}-chrome.zip`,
-    `MYs Chapar-${version}-vscode.vsix`,
   ].map((name) => resolve(releaseDir, name));
 }
 
@@ -162,16 +162,11 @@ try {
       [
         "--fail-with-body",
         "--http1.1",
-        "--retry",
-        "2",
-        "--retry-all-errors",
         "--connect-timeout",
         "30",
-        "--max-time",
-        "900",
         "-H",
         "Expect:",
-        "-#",
+        "-#"
         "-T",
         file,
         ...authHeader,
