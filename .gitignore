@@ -7,3 +7,5 @@ release
 *.log
 .env
 .env.*
+.cursor
+.cursor/*
