@@ -11,12 +11,13 @@ const tag = `v${version}`;
 const releaseDir = resolve(root, "release");
 
 function git(args, opts = {}) {
-  return execFileSync("git", args, {
+  const out = execFileSync("git", args, {
     cwd: root,
     encoding: "utf8",
     stdio: opts.stdio ?? ["ignore", "pipe", "pipe"],
     ...opts,
-  }).trim();
+  });
+  return typeof out === "string" ? out.trim() : "";
 }
 
 function githubToken() {
