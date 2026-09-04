@@ -1,22 +1,23 @@
 ---
-description: How to cut a version and publish GitHub Release artifacts from release/
-globs: package.json,release/**,scripts/bump-version.mjs,scripts/publish-release.mjs
+description: Cut a version and publish GitHub Release assets from release/ (never commit binaries)
 alwaysApply: true
 ---
 
 # Versioning and GitHub Release
 
-Do **not** commit `release/`. Binaries stay gitignored and are published as GitHub Release assets.
+Do **not** commit `release/`. Binaries stay gitignored and go to GitHub Release assets.
 
-`package.json` `version` is the source of truth. Tag format is `vX.Y.Z` (example: `0.1.0` → `v0.1.0`).
+`package.json` `version` is the source of truth. Tag = `v` + version (`0.1.0` → `v0.1.0`).
+
+When the user says «ورژن بده» / «release» / «publish», run this flow. Ask patch vs minor vs major only if they did not specify. Default to `patch`.
 
 ## Every new version
 
-1. Bump: `npm run bump-version -- patch` (or `minor` / `major` / `1.2.3`).
-   This updates `package.json`, `package-lock.json`, `src/shared/app-version.ts`, and `src/extension/manifest.json`.
-2. Build: `npm run dist` (fills `release/` with dmg/zip/vsix named after that version).
-3. Commit the version bump only (never `release/`).
-4. Publish: `npm run publish-release`
+1. `npm run bump-version -- patch` (or `minor` / `major` / `1.2.3`).
+   Updates `package.json`, `package-lock.json`, `src/shared/app-version.ts`, `src/extension/manifest.json`.
+2. `npm run dist` — writes versioned files into `release/`.
+3. Commit **only** the version bump (never `release/`).
+4. Working tree must be clean, then `npm run publish-release`
    — tags `vX.Y.Z`, pushes, creates the GitHub Release, uploads:
    - `MYs Chapar-X.Y.Z-arm64.dmg`
    - `MYs Chapar-X.Y.Z-win.zip`
@@ -24,5 +25,4 @@ Do **not** commit `release/`. Binaries stay gitignored and are published as GitH
    - `MYs Chapar-X.Y.Z-chrome.zip`
    - `MYs Chapar-X.Y.Z-vscode.vsix`
 
-If the user says «ورژن بده» / «release» / «publish», run this flow (ask only for patch vs minor vs major if they did not specify).
-Working tree must be clean before `publish-release`.
+If `release/` already has all five files for the **current** `package.json` version and that tag is not fully published, skip bump/dist and only run `publish-release`.
