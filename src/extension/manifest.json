@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MYs Chapar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MYs Chapar — API client",
   "author": "Mahdi Usefpour",
   "action": {
@@ -21,6 +21,10 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "host_permissions": ["http://*/*", "https://*/*", "<all_urls>"],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*",
+    "<all_urls>"
+  ],
   "permissions": []
 }
