@@ -1,8 +1,15 @@
-import { existsSync, readdirSync } from "node:fs";
-import { dirname, resolve, basename } from "node:path";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
@@ -56,29 +63,6 @@ function expectedAssets() {
   ].map((name) => resolve(releaseDir, name));
 }
 
-function api(path, { method = "GET", token, body, slug } = {}) {
-  const res = execFileSync(
-    "curl",
-    [
-      "-sS",
-      "-X",
-      method,
-      "-H",
-      `Authorization: Bearer ${token}`,
-      "-H",
-      "Accept: application/vnd.github+json",
-      "-H",
-      "X-GitHub-Api-Version: 2022-11-28",
-      "-H",
-      "User-Agent: mys-chapar-release",
-      ...(body ? ["-H", "Content-Type: application/json", "-d", JSON.stringify(body)] : []),
-      `https://api.github.com/repos/${slug}${path}`,
-    ],
-    { encoding: "utf8" },
-  );
-  return JSON.parse(res);
-}
-
 if (!existsSync(releaseDir)) {
   throw new Error("release/ is missing. Run npm run dist first.");
 }
@@ -99,90 +83,104 @@ if (status) {
 
 const token = githubToken();
 const slug = repoSlug();
+const tmp = mkdtempSync(join(tmpdir(), "mys-chapar-release-"));
+const headerFile = join(tmp, "headers");
+writeFileSync(
+  headerFile,
+  [
+    `Authorization: Bearer ${token}`,
+    "Accept: application/vnd.github+json",
+    "X-GitHub-Api-Version: 2022-11-28",
+    "User-Agent: mys-chapar-release",
+    "",
+  ].join("\n"),
+  { mode: 0o600 },
+);
+const authHeader = ["-H", `@${headerFile}`];
 
-const existingTag = git(["tag", "-l", tag]);
-if (!existingTag) {
-  git(["tag", "-a", tag, "-m", `MYs Chapar ${version}`], { stdio: "inherit" });
-  console.log(`Created tag ${tag}`);
-} else {
-  console.log(`Tag ${tag} already exists`);
+function api(path, { method = "GET", body } = {}) {
+  const args = ["-sS", ...authHeader, "-X", method];
+  if (body) {
+    args.push("-H", "Content-Type: application/json", "-d", JSON.stringify(body));
+  }
+  args.push(`https://api.github.com/repos/${slug}${path}`);
+  return JSON.parse(execFileSync("curl", args, { encoding: "utf8" }));
 }
 
-execFileSync("git", ["push", "origin", "HEAD", tag], { cwd: root, stdio: "inherit" });
-
-let release;
 try {
-  release = api(`/releases/tags/${tag}`, { token, slug });
-  if (release.message === "Not Found") release = null;
-} catch {
-  release = null;
-}
-
-if (!release || release.message === "Not Found") {
-  release = api("/releases", {
-    token,
-    slug,
-    method: "POST",
-    body: {
-      tag_name: tag,
-      name: `MYs Chapar ${version}`,
-      body: [
-        `Desktop, Chrome, and VS Code builds for **${version}**.`,
-        "",
-        "| File | Platform |",
-        "| --- | --- |",
-        `| \`MYs Chapar-${version}-arm64.dmg\` | macOS Apple Silicon |`,
-        `| \`MYs Chapar-${version}-win.zip\` | Windows |`,
-        `| \`mychapar-linux-${version}.zip\` | Linux |`,
-        `| \`MYs Chapar-${version}-chrome.zip\` | Chrome extension |`,
-        `| \`MYs Chapar-${version}-vscode.vsix\` | VS Code |`,
-      ].join("\n"),
-    },
-  });
-  console.log(`Created GitHub release ${tag}`);
-} else {
-  console.log(`GitHub release ${tag} already exists`);
-}
-
-if (!release?.id) {
-  throw new Error(`Could not create or load release: ${JSON.stringify(release)}`);
-}
-
-const uploaded = new Set((release.assets || []).map((asset) => asset.name));
-
-for (const file of assets) {
-  const name = basename(file);
-  if (uploaded.has(name)) {
-    console.log(`Skip existing asset ${name}`);
-    continue;
+  const existingTag = git(["tag", "-l", tag]);
+  if (!existingTag) {
+    git(["tag", "-a", tag, "-m", `MYs Chapar ${version}`], { stdio: "inherit" });
+    console.log(`Created tag ${tag}`);
+  } else {
+    console.log(`Tag ${tag} already exists`);
   }
-  console.log(`Uploading ${name}...`);
-  const encoded = encodeURIComponent(name);
-  const result = execFileSync(
-    "curl",
-    [
-      "-sS",
-      "-X",
-      "POST",
-      "-H",
-      `Authorization: Bearer ${token}`,
-      "-H",
-      "Accept: application/vnd.github+json",
-      "-H",
-      "Content-Type: application/octet-stream",
-      "-H",
-      "User-Agent: mys-chapar-release",
-      "--data-binary",
-      `@${file}`,
-      `https://uploads.github.com/repos/${slug}/releases/${release.id}/assets?name=${encoded}`,
-    ],
-    { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
-  );
-  const parsed = JSON.parse(result);
-  if (!parsed.browser_download_url) {
-    throw new Error(`Upload failed for ${name}: ${result}`);
-  }
-  console.log(`  ${parsed.browser_download_url}`);
-}
 
-console.log(`Release published: https://github.com/${slug}/releases/tag/${tag}`);
+  execFileSync("git", ["push", "origin", "HEAD", tag], { cwd: root, stdio: "inherit" });
+
+  let release = api(`/releases/tags/${tag}`);
+  if (release.message === "Not Found") {
+    release = api("/releases", {
+      method: "POST",
+      body: {
+        tag_name: tag,
+        name: `MYs Chapar ${version}`,
+        body: [
+          `Desktop, Chrome, and VS Code builds for **${version}**.`,
+          "",
+          "| File | Platform |",
+          "| --- | --- |",
+          `| \`MYs Chapar-${version}-arm64.dmg\` | macOS Apple Silicon |`,
+          `| \`MYs Chapar-${version}-win.zip\` | Windows |`,
+          `| \`mychapar-linux-${version}.zip\` | Linux |`,
+          `| \`MYs Chapar-${version}-chrome.zip\` | Chrome extension |`,
+          `| \`MYs Chapar-${version}-vscode.vsix\` | VS Code |`,
+        ].join("\n"),
+      },
+    });
+    console.log(`Created GitHub release ${tag}`);
+  } else {
+    console.log(`GitHub release ${tag} already exists`);
+  }
+
+  if (!release?.id) {
+    throw new Error(`Could not create or load release: ${JSON.stringify(release)}`);
+  }
+
+  const uploaded = new Set((release.assets || []).map((asset) => asset.name));
+
+  for (const file of assets) {
+    const name = basename(file);
+    if (uploaded.has(name)) {
+      console.log(`Skip existing asset ${name}`);
+      continue;
+    }
+    console.log(`Uploading ${name}...`);
+    const outFile = join(tmp, `${name}.json`);
+    execFileSync(
+      "curl",
+      [
+        "--fail-with-body",
+        "--progress-bar",
+        "-T",
+        file,
+        ...authHeader,
+        "-H",
+        "Content-Type: application/octet-stream",
+        "-o",
+        outFile,
+        `https://uploads.github.com/repos/${slug}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`,
+      ],
+      { stdio: "inherit" },
+    );
+    const parsed = JSON.parse(readFileSync(outFile, "utf8"));
+    if (!parsed.browser_download_url) {
+      throw new Error(`Upload failed for ${name}: ${JSON.stringify(parsed)}`);
+    }
+    console.log(`  ${parsed.browser_download_url}`);
+  }
+
+  console.log(`Release published: https://github.com/${slug}/releases/tag/${tag}`);
+} finally {
+  rmSync(tmp, { recursive: true, force: true });
+}
