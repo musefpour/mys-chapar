@@ -148,40 +148,59 @@ try {
   }
 
   const uploaded = new Set((release.assets || []).map((asset) => asset.name));
+  const alreadyUploaded = (name) =>
+    uploaded.has(name) || uploaded.has(name.replaceAll(" ", "."));
+
+  function uploadAsset(file, name) {
+    const outFile = join(tmp, `${name}.json`);
+    const attempts = 8;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        execFileSync(
+          "curl",
+          [
+            "--fail-with-body",
+            "-4",
+            "--http1.1",
+            "--connect-timeout",
+            "30",
+            "-H",
+            "Expect:",
+            "-#",
+            "-T",
+            file,
+            ...authHeader,
+            "-H",
+            "Content-Type: application/octet-stream",
+            "-o",
+            outFile,
+            `https://uploads.github.com/repos/${slug}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`,
+          ],
+          { stdio: "inherit" },
+        );
+        const parsed = JSON.parse(readFileSync(outFile, "utf8"));
+        if (!parsed.browser_download_url) {
+          throw new Error(`Upload failed for ${name}: ${JSON.stringify(parsed)}`);
+        }
+        return parsed;
+      } catch (error) {
+        if (attempt === attempts) throw error;
+        const wait = Math.min(30, 5 * attempt);
+        console.log(`  retry ${attempt}/${attempts} in ${wait}s...`);
+        execFileSync("sleep", [String(wait)]);
+      }
+    }
+  }
 
   for (const file of assets) {
     const name = basename(file);
-    if (uploaded.has(name)) {
+    if (alreadyUploaded(name)) {
       console.log(`Skip existing asset ${name}`);
       continue;
     }
     console.log(`Uploading ${name}...`);
-    const outFile = join(tmp, `${name}.json`);
-    execFileSync(
-      "curl",
-      [
-        "--fail-with-body",
-        "--http1.1",
-        "--connect-timeout",
-        "30",
-        "-H",
-        "Expect:",
-        "-#",
-        "-T",
-        file,
-        ...authHeader,
-        "-H",
-        "Content-Type: application/octet-stream",
-        "-o",
-        outFile,
-        `https://uploads.github.com/repos/${slug}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`,
-      ],
-      { stdio: "inherit" },
-    );
-    const parsed = JSON.parse(readFileSync(outFile, "utf8"));
-    if (!parsed.browser_download_url) {
-      throw new Error(`Upload failed for ${name}: ${JSON.stringify(parsed)}`);
-    }
+    const parsed = uploadAsset(file, name);
+    uploaded.add(parsed.name || name);
     console.log(`  ${parsed.browser_download_url}`);
   }
 
