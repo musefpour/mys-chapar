@@ -1,0 +1,139 @@
+{
+  "name": "mychapar",
+  "version": "0.1.0",
+  "description": "MYs Chapar — API client",
+  "main": "out/main/index.js",
+  "author": "Mahdi Usefpour",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/set-mac-app-name.mjs && electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "node scripts/set-mac-app-name.mjs && electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.vscode.json",
+    "build:chrome": "node scripts/build-extension.mjs",
+    "build:vscode": "node scripts/build-vscode.mjs",
+    "dist:chrome": "npm run build:chrome",
+    "dist:vscode": "npm run build:vscode",
+    "dist": "npm run build && electron-builder --mac --win --linux && npm run dist:chrome && npm run dist:vscode",
+    "dist-nomac": "npm run build && electron-builder --win --linux && npm run dist:chrome && npm run dist:vscode",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "release": "npm run dist",
+    "خروجی": "npm run dist"
+  },
+  "build": {
+    "appId": "com.mychapar.app",
+    "productName": "MYs Chapar",
+    "copyright": "Copyright © Mahdi Usefpour",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Development",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MYs Chapar"
+    }
+  },
+  "dependencies": {
+    "js-yaml": "^5.2.3",
+    "nanoid": "^5.1.5",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/js-yaml": "^4.0.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@types/vscode": "^1.136.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vscode/vsce": "^3.9.2",
+    "electron": "^34.3.0",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^3.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  }
+}

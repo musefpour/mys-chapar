@@ -1,0 +1,9 @@
+# GhadirMan
+node_modules
+dist
+out
+release
+.DS_Store
+*.log
+.env
+.env.*
